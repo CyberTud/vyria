@@ -1,0 +1,62 @@
+# Flutter
+lingochat/.dart_tool/
+lingochat/.packages
+lingochat/.flutter-plugins
+lingochat/.flutter-plugins-dependencies
+lingochat/build/
+lingochat/.idea/
+lingochat/*.iml
+lingochat/*.ipr
+lingochat/*.iws
+lingochat/.metadata
+lingochat/.pub/
+lingochat/pubspec.lock
+
+# iOS
+lingochat/ios/Flutter/Flutter.podspec
+lingochat/ios/.generated/
+lingochat/ios/Flutter/App.framework
+lingochat/ios/Flutter/Flutter.framework
+lingochat/ios/Flutter/Generated.xcconfig
+lingochat/ios/Flutter/flutter_assets/
+lingochat/ios/Flutter/flutter_export_environment.sh
+lingochat/ios/ServiceDefinitions.json
+lingochat/ios/Runner/GeneratedPluginRegistrant.*
+lingochat/ios/Pods/
+lingochat/ios/Podfile.lock
+
+# Android
+lingochat/android/.gradle/
+lingochat/android/.idea/
+lingochat/android/local.properties
+lingochat/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+lingochat/android/gradle-wrapper.jar
+
+# macOS
+lingochat/macos/Flutter/ephemeral/
+lingochat/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Node.js
+server/node_modules/
+server/npm-debug.log*
+server/yarn-debug.log*
+server/yarn-error.log*
+
+# Environment variables
+.env
+lingochat/.env
+server/.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
