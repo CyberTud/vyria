@@ -1,0 +1,71 @@
+name: vyria
+description: AI-powered language learning chat app
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+
+  # Navigation
+  go_router: ^13.0.0
+
+  # Networking
+  dio: ^5.4.0
+  web_socket_channel: ^2.4.0
+
+  # Data Models
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+  # Local Storage
+  shared_preferences: ^2.2.2
+
+  # Utilities
+  intl: ^0.20.2
+  flutter_markdown: ^0.6.18
+  flutter_dotenv: ^5.1.0
+  logger: ^2.0.2
+  uuid: ^4.2.2
+  collection: ^1.18.0
+  flutter_animate: ^4.5.0
+  rive: ^0.12.4
+
+  # UI Components
+  shimmer: ^3.0.0
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  build_runner: ^2.4.7
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  flutter_launcher_icons: ^0.13.1
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/animations/
+    - assets/images/
+  generate: true
+
+flutter_launcher_icons:
+  image_path: 'assets/images/vyria.png'
+  android: true
+  ios: true
+  remove_alpha_ios: true
