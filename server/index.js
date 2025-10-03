@@ -93,6 +93,36 @@ app.post('/chat', async (req, res) => {
       max_tokens: 500,
     });
 
+    const aiMessage = completion.choices[0].message.content?.trim() || '';
+
+    let translation = null;
+    let hint = null;
+
+    try {
+      const translationPrompt = `You are helping a ${language} tutor. Provide a JSON object with two keys: "translation" and "hint".\n- "translation": translate the assistant message into English in a natural tone.\n- "hint": give an encouraging reply tip in ${language} (one or two sentences) appropriate for a ${level} learner.\nRespond with valid JSON only.\nAssistant message: "${aiMessage}"`;
+
+      const helper = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You produce concise JSON. Never add extra text. Keys must be translation and hint.',
+          },
+          { role: 'user', content: translationPrompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+      });
+
+      const helperResponse = helper.choices[0].message.content || '{}';
+      const parsed = JSON.parse(helperResponse);
+      translation = parsed.translation || null;
+      hint = parsed.hint || null;
+    } catch (err) {
+      console.log('Translation helper failed:', err.message);
+    }
+
     // Enhanced correction analysis for user's last message
     let correction = null;
     let grade = null;
@@ -113,7 +143,7 @@ app.post('/chat', async (req, res) => {
       6. "feedback": encouraging feedback message
       7. "improvements": specific suggestions for improvement
 
-      Be encouraging but accurate. Grade based on:
+      Be encouraging but accurate. Write the "corrected", "mistakes[].explanation", "feedback", and each item in "improvements" in ${language}. Grade based on:
       - Grammar accuracy (40%)
       - Vocabulary usage (30%)
       - Sentence structure (20%)
@@ -196,10 +226,12 @@ app.post('/chat', async (req, res) => {
     }
 
     res.json({
-      message: completion.choices[0].message.content,
+      message: aiMessage,
       correction: correction,
       grade: grade,
       points: points,
+      translation,
+      hint,
       usage: completion.usage,
     });
 
