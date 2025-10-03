@@ -77,7 +77,8 @@ app.post('/chat', async (req, res) => {
 
       When the student makes mistakes, be supportive and explain corrections clearly.
       Respond primarily in ${language}, but use English for grammar explanations.
-      Keep your responses friendly and encouraging!`;
+      Keep your responses friendly and encouraging!
+      8. If the student slips into another language, gently remind them to continue in ${language}.`;
     }
 
     const systemMessage = {
@@ -99,7 +100,7 @@ app.post('/chat', async (req, res) => {
     let hint = null;
 
     try {
-      const translationPrompt = `You are helping a ${language} tutor. Provide a JSON object with two keys: "translation" and "hint".\n- "translation": translate the assistant message into English in a natural tone.\n- "hint": give an encouraging reply tip in ${language} (one or two sentences) appropriate for a ${level} learner.\nRespond with valid JSON only.\nAssistant message: "${aiMessage}"`;
+      const translationPrompt = `You are helping a ${language} tutor. Provide a JSON object with two keys: "translation" and "hint".\n- "translation": translate the assistant message into English in a natural tone.\n- "hint": briefly explain one challenging phrase from the assistant message so the student can reply better. Keep the hint to one short sentence in English.\nRespond with valid JSON only.\nAssistant message: "${aiMessage}"`;
 
       const helper = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -143,11 +144,12 @@ app.post('/chat', async (req, res) => {
       6. "feedback": encouraging feedback message
       7. "improvements": specific suggestions for improvement
 
-      Be encouraging but accurate. Write the "corrected", "mistakes[].explanation", "feedback", and each item in "improvements" in ${language}. Grade based on:
+      Be encouraging but accurate. Write the "corrected" in ${language}, but write "mistakes[].explanation", "feedback", and each item in "improvements" in English. Grade based on:
       - Grammar accuracy (40%)
       - Vocabulary usage (30%)
       - Sentence structure (20%)
       - Spelling (10%)
+      If the student's message is not in ${language}, politely remind them to respond in ${language} and provide guidance. 
 
       Example response:
       {
