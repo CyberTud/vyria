@@ -456,6 +456,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       return;
     }
 
+    // Add vibration feedback
+    HapticFeedback.mediumImpact();
+
     ref.read(selectedLanguageProvider.notifier).state = language.name;
     ref.read(selectedLevelProvider.notifier).state = level.code;
     ref.read(activeRoleplayProvider.notifier).state = _selectedRoleplay;
@@ -561,24 +564,55 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     subtitle: 'Pick the language you want to practice today.',
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    height: 190,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      itemCount: _languages.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final lang = _languages[index];
-                        return _SelectableCard(
-                          isSelected: _selectedLanguage?.code == lang.code,
-                          onTap: () => _onLanguageSelected(lang),
-                          icon: lang.flag,
-                          title: lang.name,
-                          subtitle: lang.fact,
-                        );
-                      },
-                    ),
+                  Stack(
+                    children: [
+                      SizedBox(
+                        height: 190,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          itemCount: _languages.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            final lang = _languages[index];
+                            return _SelectableCard(
+                              isSelected: _selectedLanguage?.code == lang.code,
+                              onTap: () => _onLanguageSelected(lang),
+                              icon: lang.flag,
+                              title: lang.name,
+                              subtitle: lang.fact,
+                            );
+                          },
+                        ),
+                      ),
+                      // Swipe tutorial shadow
+                      if (_languages.length > 3)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 30,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.white.withOpacity(0.8),
+                                ],
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.swipe_left,
+                                color: Colors.grey[400],
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 28),
                   const _SectionHeader(
@@ -617,63 +651,94 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   const SizedBox(height: 12),
                   _roleplaysLoading
                       ? const Center(child: CircularProgressIndicator())
-                      : SizedBox(
-                          height: 190,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount:
-                                (_roleplays.isEmpty ? 0 : _roleplays.length) + 1,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 16),
-                            itemBuilder: (context, index) {
-                              if (index == 0) {
-                                final isSelected = _selectedRoleplay == null;
-                                return _FreeConversationCard(
-                                  isSelected: isSelected,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedRoleplay = null;
-                                    });
-                                  },
-                                );
-                              }
+                      : Stack(
+                          children: [
+                            SizedBox(
+                              height: 190,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount:
+                                    (_roleplays.isEmpty ? 0 : _roleplays.length) + 1,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 16),
+                                itemBuilder: (context, index) {
+                                  if (index == 0) {
+                                    final isSelected = _selectedRoleplay == null;
+                                    return _FreeConversationCard(
+                                      isSelected: isSelected,
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRoleplay = null;
+                                        });
+                                      },
+                                    );
+                                  }
 
-                              if (_roleplays.isEmpty) {
-                                return Container(
-                                  width: 220,
-                                  padding: const EdgeInsets.all(18),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: primaryColor.withOpacity(0.2),
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'No simulations available yet. Pick "Free conversation" to start chatting.',
-                                      style: TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w500,
+                                  if (_roleplays.isEmpty) {
+                                    return Container(
+                                      width: 220,
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: primaryColor.withOpacity(0.2),
+                                        ),
                                       ),
+                                      child: const Center(
+                                        child: Text(
+                                          'No simulations available yet. Pick "Free conversation" to start chatting.',
+                                          style: TextStyle(
+                                            color: Colors.black87,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  final roleplay = _roleplays[index - 1];
+                                  return _RoleplayCard(
+                                    roleplay: roleplay,
+                                    isSelected:
+                                        roleplay.id == _selectedRoleplay?.id,
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedRoleplay = roleplay;
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                            // Swipe tutorial shadow
+                            if (_roleplays.length > 2)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 30,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.white.withOpacity(0.8),
+                                      ],
                                     ),
                                   ),
-                                );
-                              }
-
-                              final roleplay = _roleplays[index - 1];
-                              return _RoleplayCard(
-                                roleplay: roleplay,
-                                isSelected:
-                                    roleplay.id == _selectedRoleplay?.id,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedRoleplay = roleplay;
-                                  });
-                                },
-                              );
-                            },
-                          ),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.swipe_left,
+                                      color: Colors.grey[400],
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                   const SizedBox(height: 36),
                   SizedBox(
@@ -2020,26 +2085,58 @@ class TypingIndicator extends StatefulWidget {
 }
 
 class _TypingIndicatorState extends State<TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
+    with TickerProviderStateMixin {
+  late AnimationController _scaleController;
+  late AnimationController _rotationController;
+  late AnimationController _pulseController;
+  
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _rotationAnimation;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+    
+    // Scale animation for bouncing effect
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    // Rotation animation for subtle spin
+    _rotationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat();
-    _animation = CurvedAnimation(
-      parent: _controller,
+    
+    // Pulse animation for the container
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _scaleAnimation = CurvedAnimation(
+      parent: _scaleController,
+      curve: Curves.easeInOut,
+    );
+    
+    _rotationAnimation = CurvedAnimation(
+      parent: _rotationController,
+      curve: Curves.linear,
+    );
+    
+    _pulseAnimation = CurvedAnimation(
+      parent: _pulseController,
       curve: Curves.easeInOut,
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _scaleController.dispose();
+    _rotationController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -2047,40 +2144,109 @@ class _TypingIndicatorState extends State<TypingIndicator>
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_scaleAnimation, _rotationAnimation, _pulseAnimation]),
+        builder: (context, child) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.grey[50]!,
+                  Colors.white,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.grey[200]!,
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.1 + _pulseAnimation.value * 0.1),
+                  blurRadius: 8 + _pulseAnimation.value * 4,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: AnimatedBuilder(
-          animation: _animation,
-          builder: (context, child) {
-            return Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(3, (index) {
-                final delay = index * 0.2;
-                final value = (_animation.value - delay).clamp(0.0, 1.0);
-                return Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.3 + value * 0.7),
-                    shape: BoxShape.circle,
+              children: [
+                // Vyria animated avatar
+                Transform.scale(
+                  scale: 1.0 + _scaleAnimation.value * 0.1,
+                  child: Transform.rotate(
+                    angle: _rotationAnimation.value * 0.1,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            primaryColor.withOpacity(0.2),
+                            primaryAccent.withOpacity(0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: primaryColor.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: Image.asset(
+                          'assets/images/vyria.png',
+                          width: 30,
+                          height: 30,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.auto_awesome,
+                              color: primaryAccent,
+                              size: 18,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-                );
-              }),
-            );
-          },
-        ),
+                ),
+                const SizedBox(width: 12),
+                // Typing dots
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(3, (index) {
+                    final delay = index * 0.2;
+                    final value = (_pulseAnimation.value - delay).clamp(0.0, 1.0);
+                    return Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: primaryAccent.withOpacity(0.3 + value * 0.7),
+                        shape: BoxShape.circle,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Vyria is typing...',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -2155,16 +2321,47 @@ class _CorrectionSummary extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
-      child: SizedBox(
-        height: 80, // Height for compact cards
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          itemCount: carouselItems.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (context, index) => carouselItems[index],
-        ),
+      child: Stack(
+        children: [
+          SizedBox(
+            height: 80, // Height for compact cards
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              itemCount: carouselItems.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) => carouselItems[index],
+            ),
+          ),
+          // Swipe tutorial shadow
+          if (carouselItems.length > 3)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 20,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.transparent,
+                      Colors.white.withOpacity(0.9),
+                    ],
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.swipe_left,
+                    color: Colors.grey[400],
+                    size: 16,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
