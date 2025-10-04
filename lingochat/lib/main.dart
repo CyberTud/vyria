@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -291,6 +292,45 @@ final totalPointsProvider = StateProvider((ref) => 0);
 final streakProvider = StateProvider((ref) => 0);
 final activeRoleplayProvider = StateProvider<RoleplayScenario?>((ref) => null);
 final showHintsProvider = StateProvider((ref) => true);
+final showCorrectionAnimationProvider = StateProvider((ref) => false);
+final currentCorrectionDataProvider = StateProvider<Map<String, dynamic>?>((ref) => null);
+
+// Text-to-Speech Provider
+final ttsProvider = Provider<FlutterTts>((ref) {
+  final tts = FlutterTts();
+  tts.setSpeechRate(0.5);
+  tts.setVolume(0.8);
+  tts.setPitch(1.0);
+  return tts;
+});
+
+// Helper function to get language code for TTS
+String getLanguageCode(String language) {
+  switch (language) {
+    case 'Spanish':
+      return 'es-ES';
+    case 'French':
+      return 'fr-FR';
+    case 'German':
+      return 'de-DE';
+    case 'Italian':
+      return 'it-IT';
+    case 'Portuguese':
+      return 'pt-PT';
+    case 'Dutch':
+      return 'nl-NL';
+    case 'Russian':
+      return 'ru-RU';
+    case 'Japanese':
+      return 'ja-JP';
+    case 'Korean':
+      return 'ko-KR';
+    case 'Chinese':
+      return 'zh-CN';
+    default:
+      return 'en-US';
+  }
+}
 
 class LanguageOption {
   LanguageOption({
@@ -564,55 +604,33 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     subtitle: 'Pick the language you want to practice today.',
                   ),
                   const SizedBox(height: 12),
-                  Stack(
-                    children: [
-                      SizedBox(
-                        height: 190,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          itemCount: _languages.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 12),
-                          itemBuilder: (context, index) {
-                            final lang = _languages[index];
-                            return _SelectableCard(
-                              isSelected: _selectedLanguage?.code == lang.code,
-                              onTap: () => _onLanguageSelected(lang),
-                              icon: lang.flag,
-                              title: lang.name,
-                              subtitle: lang.fact,
-                            );
-                          },
+                  SizedBox(
+                    height: 190,
+                    child: Stack(
+                      children: [
+                        ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      itemCount: _languages.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final lang = _languages[index];
+                        return _SelectableCard(
+                          isSelected: _selectedLanguage?.code == lang.code,
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                _onLanguageSelected(lang);
+                              },
+                          icon: lang.flag,
+                          title: lang.name,
+                          subtitle: lang.fact,
+                        );
+                      },
                         ),
-                      ),
-                      // Swipe tutorial shadow
-                      if (_languages.length > 3)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          bottom: 0,
-                          child: Container(
-                            width: 30,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.white.withOpacity(0.8),
-                                ],
-                              ),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.swipe_left,
-                                color: Colors.grey[400],
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
+                        if (_languages.length > 3)
+                          _SwipeHint(showCondition: _languages.length > 3),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 28),
                   const _SectionHeader(
@@ -635,7 +653,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                                 description: level.description.isNotEmpty
                                     ? level.description
                                     : level.name,
-                                onTap: () => _onLevelSelected(level),
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  _onLevelSelected(level);
+                                },
                               ),
                             ),
                           )
@@ -651,94 +672,71 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   const SizedBox(height: 12),
                   _roleplaysLoading
                       ? const Center(child: CircularProgressIndicator())
-                      : Stack(
-                          children: [
-                            SizedBox(
-                              height: 190,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount:
-                                    (_roleplays.isEmpty ? 0 : _roleplays.length) + 1,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(width: 16),
-                                itemBuilder: (context, index) {
-                                  if (index == 0) {
-                                    final isSelected = _selectedRoleplay == null;
-                                    return _FreeConversationCard(
-                                      isSelected: isSelected,
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedRoleplay = null;
-                                        });
-                                      },
-                                    );
-                                  }
+                      : SizedBox(
+                          height: 190,
+                          child: Stack(
+                            children: [
+                              ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount:
+                                (_roleplays.isEmpty ? 0 : _roleplays.length) + 1,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 16),
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                final isSelected = _selectedRoleplay == null;
+                                return _FreeConversationCard(
+                                  isSelected: isSelected,
+                                  onTap: () {
+                                        HapticFeedback.lightImpact();
+                                    setState(() {
+                                      _selectedRoleplay = null;
+                                    });
+                                  },
+                                );
+                              }
 
-                                  if (_roleplays.isEmpty) {
-                                    return Container(
-                                      width: 220,
-                                      padding: const EdgeInsets.all(18),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.7),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: primaryColor.withOpacity(0.2),
-                                        ),
-                                      ),
-                                      child: const Center(
-                                        child: Text(
-                                          'No simulations available yet. Pick "Free conversation" to start chatting.',
-                                          style: TextStyle(
-                                            color: Colors.black87,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-
-                                  final roleplay = _roleplays[index - 1];
-                                  return _RoleplayCard(
-                                    roleplay: roleplay,
-                                    isSelected:
-                                        roleplay.id == _selectedRoleplay?.id,
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedRoleplay = roleplay;
-                                      });
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                            // Swipe tutorial shadow
-                            if (_roleplays.length > 2)
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 30,
+                              if (_roleplays.isEmpty) {
+                                return Container(
+                                  width: 220,
+                                  padding: const EdgeInsets.all(18),
                                   decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.white.withOpacity(0.8),
-                                      ],
+                                    color: Colors.white.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: primaryColor.withOpacity(0.2),
                                     ),
                                   ),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.swipe_left,
-                                      color: Colors.grey[400],
-                                      size: 20,
+                                  child: const Center(
+                                    child: Text(
+                                      'No simulations available yet. Pick "Free conversation" to start chatting.',
+                                      style: TextStyle(
+                                        color: Colors.black87,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                );
+                              }
+
+                              final roleplay = _roleplays[index - 1];
+                              return _RoleplayCard(
+                                roleplay: roleplay,
+                                isSelected:
+                                    roleplay.id == _selectedRoleplay?.id,
+                                onTap: () {
+                                      HapticFeedback.lightImpact();
+                                  setState(() {
+                                    _selectedRoleplay = roleplay;
+                                  });
+                                },
+                              );
+                            },
                               ),
-                          ],
+                              if (_roleplays.length > 2)
+                                _SwipeHint(showCondition: _roleplays.length > 2),
+                            ],
+                          ),
                         ),
                   const SizedBox(height: 36),
                   SizedBox(
@@ -765,7 +763,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   ),
                   const SizedBox(height: 24),
                   TextButton.icon(
-                    onPressed: _loadInitialData,
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _loadInitialData();
+                    },
                     icon: const Icon(Icons.refresh),
                     label: const Text('Refresh options'),
                   ),
@@ -1106,6 +1107,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   bool _isTyping = false;
   bool _canSend = false;
   bool _hasInitializedRoleplay = false;
+  
+  // Store the last AI response for later use
+  Map<String, dynamic>? _lastAiResponse;
 
   late AnimationController _pointsAnimController;
   late Animation<double> _pointsAnimation;
@@ -1166,6 +1170,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         isFirstMessage: isFirstMessage,
       );
 
+      // Store the AI response for later use in correction animation
+      _lastAiResponse = {
+        'message': response.message,
+        'translation': response.translation,
+        'hint': response.hint,
+      };
+
+      print('🔍 Response received - correction: ${response.correction != null}, grade: ${response.grade != null}');
+
       if ((response.correction != null || response.grade != null) &&
           _messages.isNotEmpty) {
         setState(() {
@@ -1185,8 +1198,55 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           _pointsAnimController.forward(from: 0);
           HapticFeedback.mediumImpact();
         }
+
+        // Show full-screen correction animation
+        if (response.correction != null || response.grade != null) {
+          print('🔍 Showing correction animation - correction: ${response.correction != null}, grade: ${response.grade != null}');
+          
+          Map<String, dynamic> correctionData = {};
+          
+          if (response.grade != null) {
+            correctionData['grade'] = '${response.grade!.letter} (${response.grade!.score}/100)';
+          }
+          
+          if (response.correction != null) {
+            correctionData['suggestion'] = response.correction!.corrected.isEmpty 
+                ? userMessage.text 
+                : response.correction!.corrected;
+            
+            if (response.correction!.mistakes.isNotEmpty) {
+              correctionData['mistakes'] = response.correction!.mistakes.map((mistake) => {
+                'type': mistake.type,
+                'original': mistake.original,
+                'corrected': mistake.correction,
+                'explanation': mistake.explanation,
+              }).toList();
+            }
+            
+            correctionData['feedback'] = response.correction!.feedback;
+            correctionData['improvements'] = response.correction!.improvements.join('\n• ');
+          }
+
+          print('🎯 Setting correction data: $correctionData');
+          ref.read(currentCorrectionDataProvider.notifier).state = correctionData;
+          ref.read(showCorrectionAnimationProvider.notifier).state = true;
+          print('🚀 Animation should be showing now');
+          
+          // Force a rebuild to show the animation
+          setState(() {});
+        }
+      } else {
+        // Message is correct - just add points
+        if (response.points > 0) {
+          ref.read(totalPointsProvider.notifier).state += response.points;
+          ref.read(streakProvider.notifier).state += 1;
+          _pointsAnimController.forward(from: 0);
+          HapticFeedback.mediumImpact();
+        }
       }
 
+      // Only show AI message after correction animation is closed
+      if (!ref.read(showCorrectionAnimationProvider)) {
       setState(() {
         _messages.add(ChatMessage(
           text: response.message,
@@ -1197,6 +1257,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         ));
         _isTyping = false;
       });
+      } else {
+        setState(() {
+          _isTyping = false;
+        });
+      }
 
       _apiMessages.add({'role': 'assistant', 'content': response.message});
     } catch (e) {
@@ -1293,6 +1358,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final streak = ref.watch(streakProvider);
     final activeRoleplay = ref.watch(activeRoleplayProvider);
     final showHints = ref.watch(showHintsProvider);
+    final showCorrectionAnimation = ref.watch(showCorrectionAnimationProvider);
+    final currentCorrectionData = ref.watch(currentCorrectionDataProvider);
 
     ref.listen<RoleplayScenario?>(activeRoleplayProvider, (previous, next) {
       if (!mounted) return;
@@ -1303,8 +1370,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       }
     });
 
+    print('🏗️ ChatScreen build - showCorrectionAnimation: $showCorrectionAnimation, currentCorrectionData: $currentCorrectionData');
+
     return Scaffold(
-      body: Stack(
+      body: showCorrectionAnimation && currentCorrectionData != null
+          ? _FullScreenCorrectionAnimation(
+              key: ValueKey('correction_${DateTime.now().millisecondsSinceEpoch}'),
+              correctionData: currentCorrectionData,
+              onClose: () {
+                ref.read(showCorrectionAnimationProvider.notifier).state = false;
+                ref.read(currentCorrectionDataProvider.notifier).state = null;
+                
+                // Add the AI message after correction animation closes
+                if (_lastAiResponse != null) {
+                  setState(() {
+                    _messages.add(ChatMessage(
+                      text: _lastAiResponse!['message'] ?? '',
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      translation: _lastAiResponse!['translation'],
+                      hint: _lastAiResponse!['hint'],
+                    ));
+                  });
+                  _lastAiResponse = null; // Clear after use
+                }
+              },
+            )
+          : Stack(
         children: [
           const Positioned.fill(child: AnimatedBackground()),
           SafeArea(
@@ -1465,6 +1557,52 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
     }
   }
 
+  Widget _buildFormattedText(String text) {
+    final cleanText = text.replaceAll(RegExp(r'\[.*?\]'), '').trim();
+    final boldRegex = RegExp(r'\*\*(.*?)\*\*');
+    final parts = cleanText.split(boldRegex);
+    
+    return RichText(
+      text: TextSpan(
+        children: parts.asMap().entries.map((entry) {
+          final index = entry.key;
+          final part = entry.value;
+          
+          if (index % 2 == 1) {
+            // This is a bold part
+            return TextSpan(
+              text: part,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: widget.message.isUser || widget.message.isError
+                    ? Colors.white
+                    : Colors.grey[800],
+              ),
+            );
+          } else {
+            // This is a normal part
+            return TextSpan(
+              text: part,
+              style: TextStyle(
+                color: widget.message.isUser || widget.message.isError
+                    ? Colors.white
+                    : Colors.grey[800],
+                fontWeight: FontWeight.normal,
+              ),
+            );
+          }
+        }).toList(),
+        style: TextStyle(
+          fontSize: 15,
+          height: 1.4,
+          fontWeight: widget.message.isUser 
+              ? FontWeight.w500 
+              : FontWeight.w400,
+        ),
+      ),
+    );
+  }
+
   Widget _buildTranslation() {
     if (!_showTranslation ||
         _fullTranslation.isEmpty ||
@@ -1560,18 +1698,18 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
       children: [
         // Message bubble with width constraints
         Align(
-          alignment:
-              widget.message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: widget.message.isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
+      alignment:
+          widget.message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: widget.message.isUser
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
             if (widget.message.isRoleplayStarter)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1616,13 +1754,13 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Icon(
-                            Icons.auto_awesome,
-                            color: primaryAccent,
+                      Icons.auto_awesome,
+                      color: primaryAccent,
                             size: 18,
                           );
                         },
-                      ),
                     ),
+                  ),
                   ),
                   const SizedBox(width: 10),
                   Text(
@@ -1641,10 +1779,10 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      _formatTimestamp(widget.message.timestamp),
-                      style: TextStyle(
+                    _formatTimestamp(widget.message.timestamp),
+                    style: TextStyle(
                         color: Colors.grey[600],
-                        fontSize: 11,
+                      fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1701,21 +1839,7 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.message.text
-                        .replaceAll(RegExp(r'\[.*?\]'), '')
-                        .trim(),
-                    style: TextStyle(
-                      color: widget.message.isUser || widget.message.isError
-                          ? Colors.white
-                          : Colors.grey[800],
-                      fontSize: 15,
-                      height: 1.4,
-                      fontWeight: widget.message.isUser 
-                          ? FontWeight.w500 
-                          : FontWeight.w400,
-                    ),
-                  ),
+                  _buildFormattedText(widget.message.text),
                 ],
               ),
             ),
@@ -1776,6 +1900,7 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
                         icon: const Icon(Icons.lightbulb_outline, size: 16),
                         label: Text(_showHint ? 'Hide hint' : 'Hint'),
                         onPressed: () {
+                          HapticFeedback.lightImpact();
                           setState(() {
                             _showHint = !_showHint;
                           });
@@ -1786,6 +1911,7 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
                       FilledButton.icon(
                         icon: const Icon(Icons.translate_rounded, size: 16),
                         onPressed: () {
+                          HapticFeedback.lightImpact();
                           setState(() {
                             _showTranslation = !_showTranslation;
                           });
@@ -1794,14 +1920,35 @@ class _EnhancedMessageBubbleState extends ConsumerState<EnhancedMessageBubble> {
                           _showTranslation ? 'Hide translation' : 'Translation',
                         ),
                       ),
+                    // TTS button for AI messages
+                    if (!widget.message.isUser && !widget.message.isError)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.volume_up_rounded, size: 16),
+                        label: const Text('Listen'),
+                        onPressed: () async {
+                          HapticFeedback.lightImpact();
+                          try {
+                            final tts = ref.read(ttsProvider);
+                            final language = ref.read(selectedLanguageProvider);
+                            await tts.setLanguage(getLanguageCode(language));
+                            final cleanText = widget.message.text
+                                .replaceAll(RegExp(r'\[.*?\]'), '')
+                                .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
+                                .trim();
+                            await tts.speak(cleanText);
+                          } catch (e) {
+                            print('TTS Error: $e');
+                          }
+                        },
+                      ),
                   ],
                 ),
               ),
             _buildTranslation(),
             _buildHintCard(),
-              ],
-            ),
-          ),
+          ],
+        ),
+      ),
         ),
         // Full-width correction summary outside the message bubble
         if (widget.message.correction != null)
@@ -2042,7 +2189,10 @@ class _MessageComposer extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: canSend ? onSend : null,
+            onTap: canSend ? () {
+              HapticFeedback.lightImpact();
+              onSend();
+            } : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.all(14),
@@ -2149,7 +2299,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
         builder: (context, child) {
           return Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
+        decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   Colors.grey[50]!,
@@ -2163,14 +2313,14 @@ class _TypingIndicatorState extends State<TypingIndicator>
                 color: Colors.grey[200]!,
                 width: 1,
               ),
-              boxShadow: [
-                BoxShadow(
+          boxShadow: [
+            BoxShadow(
                   color: primaryColor.withOpacity(0.1 + _pulseAnimation.value * 0.1),
                   blurRadius: 8 + _pulseAnimation.value * 4,
                   offset: const Offset(0, 4),
-                ),
-              ],
             ),
+          ],
+        ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2219,20 +2369,20 @@ class _TypingIndicatorState extends State<TypingIndicator>
                 const SizedBox(width: 12),
                 // Typing dots
                 Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(3, (index) {
-                    final delay = index * 0.2;
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(3, (index) {
+                final delay = index * 0.2;
                     final value = (_pulseAnimation.value - delay).clamp(0.0, 1.0);
-                    return Container(
+                return Container(
                       width: 6,
                       height: 6,
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
                         color: primaryAccent.withOpacity(0.3 + value * 0.7),
-                        shape: BoxShape.circle,
-                      ),
-                    );
-                  }),
+                    shape: BoxShape.circle,
+                  ),
+                );
+              }),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -2321,11 +2471,11 @@ class _CorrectionSummary extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
-      child: Stack(
+      child: SizedBox(
+        height: 80, // Height for compact cards
+        child: Stack(
         children: [
-          SizedBox(
-            height: 80, // Height for compact cards
-            child: ListView.separated(
+            ListView.separated(
               scrollDirection: Axis.horizontal,
               physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -2333,41 +2483,153 @@ class _CorrectionSummary extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) => carouselItems[index],
             ),
-          ),
-          // Swipe tutorial shadow
-          if (carouselItems.length > 3)
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: Container(
-                width: 20,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.transparent,
-                      Colors.white.withOpacity(0.9),
-                    ],
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.swipe_left,
-                    color: Colors.grey[400],
-                    size: 16,
-                  ),
-                ),
-              ),
-            ),
-        ],
+            if (carouselItems.length > 3)
+              _SwipeHint(showCondition: carouselItems.length > 3),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _CorrectionCard extends StatelessWidget {
+// Swipe hint that appears briefly with bip-bip animation
+class _SwipeHint extends StatefulWidget {
+  const _SwipeHint({required this.showCondition});
+
+  final bool showCondition;
+
+  @override
+  State<_SwipeHint> createState() => _SwipeHintState();
+}
+
+class _SwipeHintState extends State<_SwipeHint>
+    with TickerProviderStateMixin {
+  late AnimationController _bipController;
+  late AnimationController _fadeController;
+  late Animation<double> _bipAnimation;
+  late Animation<double> _fadeAnimation;
+  bool _hasShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Bip-bip animation
+    _bipController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    
+    // Fade in/out animation
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _bipAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _bipController,
+      curve: Curves.elasticOut,
+    ));
+    
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    ));
+
+    // Start the sequence after a short delay
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startSequence();
+    });
+  }
+
+  void _startSequence() async {
+    if (!widget.showCondition || _hasShown) return;
+    
+    _hasShown = true;
+    
+    // Fade in
+    await _fadeController.forward();
+    
+    // Bip-bip animation
+    await _bipController.forward();
+    await Future.delayed(const Duration(milliseconds: 800));
+    
+    // Fade out
+    await _fadeController.reverse();
+  }
+
+  @override
+  void dispose() {
+    _bipController.dispose();
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.showCondition) return const SizedBox.shrink();
+    
+    return Positioned(
+      right: 8,
+      top: 0,
+      bottom: 0,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: AnimatedBuilder(
+          animation: _bipAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: 0.8 + (_bipAnimation.value * 0.4),
+              child: Container(
+                width: 24,
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.transparent,
+                      primaryColor.withOpacity(0.1),
+                    ],
+                  ),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.swipe_left,
+                      color: Colors.white,
+                      size: 12,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _CorrectionCard extends ConsumerStatefulWidget {
   const _CorrectionCard({
     required this.icon,
     required this.title,
@@ -2381,6 +2643,707 @@ class _CorrectionCard extends StatelessWidget {
   final String subtitle;
   final String content;
   final Color color;
+
+  @override
+  ConsumerState<_CorrectionCard> createState() => _CorrectionCardState();
+}
+
+class _FullScreenCorrectionAnimation extends ConsumerStatefulWidget {
+  const _FullScreenCorrectionAnimation({
+    super.key,
+    required this.correctionData,
+    required this.onClose,
+  });
+
+  final Map<String, dynamic> correctionData;
+  final VoidCallback onClose;
+
+  @override
+  ConsumerState<_FullScreenCorrectionAnimation> createState() => _FullScreenCorrectionAnimationState();
+}
+
+class _FullScreenCorrectionAnimationState extends ConsumerState<_FullScreenCorrectionAnimation>
+    with TickerProviderStateMixin {
+  late AnimationController _entranceController;
+  late AnimationController _bounceController;
+  late AnimationController _slideController;
+  late AnimationController _textController;
+  
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _bounceAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _rotationAnimation;
+  late Animation<double> _textOpacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Entrance animation - scale and bounce
+    _entranceController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    
+    // Bounce animation for continuous movement
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    // Slide animation for text
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    // Text opacity animation
+    _textController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.elasticOut,
+    ));
+
+    _bounceAnimation = Tween<double>(
+      begin: -15.0,
+      end: 15.0,
+    ).animate(CurvedAnimation(
+      parent: _bounceController,
+      curve: Curves.easeInOut,
+    ));
+
+    _textOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _textController,
+      curve: Curves.easeInOut,
+    ));
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutBack,
+    ));
+
+    _rotationAnimation = Tween<double>(
+      begin: 0.0,
+      end: 0.1,
+    ).animate(CurvedAnimation(
+      parent: _bounceController,
+      curve: Curves.easeInOut,
+    ));
+
+    // Start animations
+    _entranceController.forward();
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _slideController.forward();
+    });
+    Future.delayed(const Duration(milliseconds: 800), () {
+      _textController.forward();
+    });
+    
+    // Start text-to-speech
+    _speakCorrection();
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    _bounceController.dispose();
+    _slideController.dispose();
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _speakCorrection() async {
+    try {
+      final tts = ref.read(ttsProvider);
+      final grade = widget.correctionData['grade'] ?? 'Good job';
+      final suggestion = widget.correctionData['suggestion'];
+      final feedback = widget.correctionData['feedback'];
+      
+      String textToSpeak = "Your grade is $grade. ";
+      
+      if (suggestion != null && suggestion.isNotEmpty) {
+        textToSpeak += "Here's a suggestion: $suggestion. ";
+      }
+      
+      if (feedback != null && feedback.isNotEmpty) {
+        textToSpeak += "Feedback: $feedback";
+      }
+      
+      await tts.setLanguage('en-US');
+      await tts.speak(textToSpeak);
+    } catch (e) {
+      print('TTS Error: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blue.shade400,
+              Colors.yellow.shade300,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+                children: [
+              // Main content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 40),
+                      
+                      // Animated Vyria mascot
+                      AnimatedBuilder(
+                        animation: Listenable.merge([_scaleAnimation, _bounceAnimation, _rotationAnimation]),
+                        builder: (context, child) {
+                          return Transform.translate(
+                            offset: Offset(0, _bounceAnimation.value),
+                            child: Transform.rotate(
+                              angle: _rotationAnimation.value,
+                              child: ScaleTransition(
+                                scale: _scaleAnimation,
+                                child: Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.2),
+                                        blurRadius: 20,
+                                        spreadRadius: 5,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      'assets/images/vyria.png',
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Icon(
+                                          Icons.auto_awesome,
+                                          size: 80,
+                                          color: Colors.white,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      
+                      const SizedBox(height: 30),
+                      
+                      // Title
+                      SlideTransition(
+                        position: _slideAnimation,
+                    child: Text(
+                          'Vyria\'s Language Review',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withOpacity(0.3),
+                                offset: const Offset(2, 2),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 30),
+                      
+                      // Grade
+                      SlideTransition(
+                        position: _slideAnimation,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.grade_rounded,
+                                color: Colors.yellow.shade300,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Grade: ${widget.correctionData['grade'] ?? 'Good!'}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Suggestion
+                      if (widget.correctionData['suggestion'] != null) ...[
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _textOpacityAnimation,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  width: 1,
+                                ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                                      Icon(
+                                        Icons.lightbulb_rounded,
+                                        color: Colors.blue.shade300,
+                                        size: 20,
+                                      ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Suggestion',
+                      style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue.shade300,
+                                          fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      widget.correctionData['suggestion'],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      
+                      // Mistakes
+                      if (widget.correctionData['mistakes'] != null &&
+                          (widget.correctionData['mistakes'] as List).isNotEmpty) ...[
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _textOpacityAnimation,
+                            child: Container(
+                  width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.red.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.edit_rounded,
+                                        color: Colors.red.shade300,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                  Text(
+                    'What changed',
+                    style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.red.shade300,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ...((widget.correctionData['mistakes'] as List).map((mistake) {
+                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.2),
+                                          width: 1,
+                                        ),
+                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            mistake['type'] ?? 'Error',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.red.shade300,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          if (mistake['original'] != null) ...[
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.3),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'Original: ${mistake['original']}',
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                          ],
+                                          if (mistake['corrected'] != null) ...[
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green.withOpacity(0.2),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: Colors.green.withOpacity(0.3),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'Corrected: ${mistake['corrected']}',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.green.shade200,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                          ],
+                                          if (mistake['explanation'] != null) ...[
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.3),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                mistake['explanation'],
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.white,
+                                                  height: 1.3,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
+                                  })),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      
+                      // Feedback
+                      if (widget.correctionData['feedback'] != null) ...[
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _textOpacityAnimation,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.green.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.feedback_rounded,
+                                        color: Colors.green.shade300,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                            Text(
+                                        'Feedback',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.green.shade300,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      widget.correctionData['feedback'],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      
+                      // Improvements
+                      if (widget.correctionData['improvements'] != null) ...[
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _textOpacityAnimation,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.orange.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.trending_up_rounded,
+                                        color: Colors.orange.shade300,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Language Tips',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.orange.shade300,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      widget.correctionData['improvements'],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      
+                      const SizedBox(height: 30),
+                      
+                      // Close button
+                      SlideTransition(
+                        position: _slideAnimation,
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.white, Colors.grey.shade100],
+                            ),
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              widget.onClose();
+                            },
+                            icon: const Icon(Icons.check_circle_rounded),
+                            label: const Text(
+                              'Continue Learning',
+                    style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              foregroundColor: Colors.indigo.shade700,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CorrectionCardState extends ConsumerState<_CorrectionCard>
+    with TickerProviderStateMixin {
+  late AnimationController _slideController;
+  late AnimationController _glowController;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _glowAnimation;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Slide in animation
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    // Glow animation
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(1.0, 0.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.elasticOut,
+    ));
+    
+    _glowAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _glowController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Start animations
+    _slideController.forward();
+  }
+  
+  @override
+  void dispose() {
+    _slideController.dispose();
+    _glowController.dispose();
+    super.dispose();
+  }
 
   void _showFullTextPopup(BuildContext context) {
     try {
@@ -2400,26 +3363,26 @@ class _CorrectionCard extends StatelessWidget {
               padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                   // Header
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(icon, size: 20, color: color),
+                             color: widget.color.withOpacity(0.15),
+                             borderRadius: BorderRadius.circular(10),
+                           ),
+                           child: Icon(widget.icon, size: 20, color: widget.color),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          title,
+                          Expanded(
+                            child: Text(
+                          widget.title,
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: color,
+                            color: widget.color,
                             fontSize: 16,
                           ),
                         ),
@@ -2439,7 +3402,7 @@ class _CorrectionCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (subtitle.isNotEmpty) ...[
+                          if (widget.subtitle.isNotEmpty) ...[
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
@@ -2461,15 +3424,15 @@ class _CorrectionCard extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(
-                                    subtitle,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.black87,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ],
+                          Text(
+                            widget.subtitle,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                              height: 1.4,
+                      ),
+                    ),
+                  ],
                               ),
                             ),
                           ],
@@ -2477,9 +3440,9 @@ class _CorrectionCard extends StatelessWidget {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: color.withOpacity(0.05),
+                              color: widget.color.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: color.withOpacity(0.2)),
+                              border: Border.all(color: widget.color.withOpacity(0.2)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2488,48 +3451,79 @@ class _CorrectionCard extends StatelessWidget {
                                   'Full Text',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    color: color,
+                                    color: widget.color,
                                     fontSize: 12,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  content,
+                                  widget.content,
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: Colors.black87,
                                     height: 1.5,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ],
+              ],
+            ),
+          ),
+        ],
                       ),
                     ),
                   ),
                   
-                  // Close button
+                  // Action buttons
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            HapticFeedback.lightImpact();
+                            try {
+                              final tts = ref.read(ttsProvider);
+                              await tts.setLanguage('en-US');
+                              final cleanContent = widget.content
+                                  .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
+                                  .trim();
+                              await tts.speak(cleanContent);
+                            } catch (e) {
+                              print('TTS Error: $e');
+                            }
+                          },
+                          icon: const Icon(Icons.volume_up_rounded, size: 16),
+                          label: const Text('Listen'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: widget.color,
+                            side: BorderSide(color: widget.color),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
                         ),
                       ),
-                      child: const Text(
-                        'Close',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.color,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'Close',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -2544,80 +3538,127 @@ class _CorrectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        print('Card tapped - showing popup for: $title');
-        _showFullTextPopup(context);
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 170,
-        height: 80,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: color.withOpacity(0.3),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      color: color,
+    return SlideTransition(
+      position: _slideAnimation,
+      child: AnimatedBuilder(
+        animation: _glowAnimation,
+        builder: (context, child) {
+          return InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              print('Card tapped - showing popup for: ${widget.title}');
+              _showFullTextPopup(context);
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 170,
+              height: 80,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: widget.color.withOpacity(0.4),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: widget.color.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          widget.icon, 
+                          size: 14, 
+                          color: widget.color,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            color: widget.color,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withOpacity(0.1),
+                                offset: const Offset(1, 1),
+                                blurRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: widget.color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Icon(
+                          Icons.open_in_new,
+                          size: 10,
+                          color: widget.color.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      widget.subtitle,
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: widget.color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                Icon(
-                  Icons.open_in_new,
-                  size: 14,
-                  color: color.withOpacity(0.7),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Colors.black54,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Text(
-                content,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Colors.black87,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.grey[300]!,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        widget.content,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.black,
+                          height: 1.3,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

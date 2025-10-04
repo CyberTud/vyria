@@ -1,0 +1,1 @@
+ /Users/tudor/Documents/dev/lingochat/.dart_tool/flutter_build/6df8f6975827dc51e086cc2991fc2186/native_assets.json: 

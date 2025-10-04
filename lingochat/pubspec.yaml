@@ -38,6 +38,7 @@ dependencies:
   collection: ^1.18.0
   flutter_animate: ^4.5.0
   rive: ^0.12.4
+  flutter_tts: ^3.8.5
 
   # UI Components
   shimmer: ^3.0.0
